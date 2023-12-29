@@ -1,13 +1,22 @@
-# build environment
-FROM node:14-alpine as build
-WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
-COPY . .
-RUN yarn build
+FROM quay.io/keycloak/keycloak:23.0.3 as builder
 
-# production environment
-FROM nginx:stable-alpine
-COPY --from=build /app/build /usr/share/nginx/html
-COPY --from=build /app/nginx.conf /etc/nginx/conf.d/default.conf
-CMD nginx -g 'daemon off;'
+WORKDIR /opt/keycloak
+
+COPY ./build_keycloak/target/webstackpro-keycloak-theme-5.0.6.jar /opt/keycloak/providers/
+
+RUN /opt/keycloak/bin/kc.sh build
+
+FROM quay.io/keycloak/keycloak:23.0.3
+
+COPY --from=builder /opt/keycloak /opt/keycloak
+
+# Bellow environment variables are only for the local keycloak development
+ENV KEYCLOAK_ADMIN=admin
+ENV KEYCLOAK_ADMIN_PASSWORD=admin
+ENV KC_DB=postgres
+ENV KC_DB_URL=jdbc:postgresql://host.docker.internal:5432/webstackprokeycloak
+ENV KC_DB_USERNAME=alpha
+ENV KC_DB_PASSWORD=kali123
+ENV KC_HOSTNAME=localhost
+
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh", "start-dev"]
